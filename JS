@@ -1,0 +1,219 @@
+/* ============================================================
+   Task Management Dashboard — app.js
+   ============================================================ */
+
+/* ---------- State ---------- */
+let tasks = [
+  { id:1, title:'بازطراحی صفحه پروفایل کاربر',          date:'1405/08/12', priority:'HIGH',   status:'IN PROGRESS' },
+  { id:2, title:'پیاده‌سازی API نقشه و مکان‌یابی',       date:'1405/08/15', priority:'MEDIUM', status:'COMPLETED'   },
+  { id:3, title:'بررسی خطاهای گزارش شده در دیتابیس',    date:'1405/08/10', priority:'LOW',    status:'PENDING'     },
+  { id:4, title:'بهینه‌سازی کدهای بخش لندینگ',          date:'1405/08/20', priority:'MEDIUM', status:'IN PROGRESS' },
+  { id:5, title:'بهینه‌سازی تجربه کاربری (User Journey)',date:'1405/08/22', priority:'HIGH',   status:'PENDING'     },
+  { id:6, title:'رفع باگ‌های ناوبری در نسخه موبایل',     date:'1405/08/18', priority:'HIGH',   status:'IN PROGRESS' },
+];
+let nextId = 7;
+
+/* ---------- Chart data ---------- */
+const weekData = [
+  {day:'شنبه',v:85},{day:'یکشنبه',v:60},{day:'دوشنبه',v:75},
+  {day:'سه‌شنبه',v:45},{day:'چهارشنبه',v:55},{day:'پنجشنبه',v:70},{day:'جمعه',v:30},
+];
+
+/* ---------- Elements ---------- */
+const overlay     = document.getElementById('overlay');
+const taskForm    = document.getElementById('taskForm');
+const searchInput = document.getElementById('searchInput');
+const tbody       = document.getElementById('tbody');
+const emptyState  = document.getElementById('emptyState');
+const tableWrap   = document.getElementById('tableWrap');
+const toast       = document.getElementById('toast');
+const toastText   = document.getElementById('toastText');
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+function openModal() {
+  overlay.classList.add('open');
+  setTimeout(() => document.getElementById('fTitle').focus(), 230);
+}
+function closeModal() {
+  overlay.classList.remove('open');
+  taskForm.reset();
+  clearErrors();
+}
+
+document.getElementById('openModalBtn').addEventListener('click', openModal);
+document.getElementById('closeBtn').addEventListener('click', closeModal);
+document.getElementById('cancelBtn').addEventListener('click', closeModal);
+overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+/* ============================================================
+   VALIDATION
+   ============================================================ */
+function clearErrors() {
+  document.querySelectorAll('.has-error').forEach(el => el.classList.remove('has-error'));
+  document.querySelectorAll('.err.show').forEach(el => el.classList.remove('show'));
+}
+
+function showErr(inputId, errId) {
+  document.getElementById(inputId).classList.add('has-error');
+  document.getElementById(errId).classList.add('show');
+}
+
+function validate() {
+  clearErrors();
+  let ok = true;
+  const title = document.getElementById('fTitle').value.trim();
+  if (!title) { showErr('fTitle','errTitle'); ok = false; }
+  const date = document.getElementById('fDate').value;
+  if (date && new Date(date) < new Date(new Date().toDateString())) {
+    showErr('fDate','errDate'); ok = false;
+  }
+  return ok;
+}
+
+/* Remove error on type */
+document.getElementById('fTitle').addEventListener('input', function() {
+  this.classList.remove('has-error');
+  document.getElementById('errTitle').classList.remove('show');
+});
+
+/* ============================================================
+   SUBMIT
+   ============================================================ */
+taskForm.addEventListener('submit', e => {
+  e.preventDefault();
+  if (!validate()) return;
+  const t = {
+    id:       nextId++,
+    title:    document.getElementById('fTitle').value.trim(),
+    date:     document.getElementById('fDate').value || '—',
+    priority: document.getElementById('fPriority').value,
+    status:   document.getElementById('fStatus').value,
+  };
+  tasks.unshift(t);
+  closeModal();
+  render(searchInput.value);
+  updateStats();
+  showToast('تسک با موفقیت ثبت شد!');
+});
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+function showToast(msg) {
+  toastText.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+/* ============================================================
+   RENDER TABLE
+   ============================================================ */
+const priorityBadge = { HIGH:'badge-high', MEDIUM:'badge-medium', LOW:'badge-low' };
+const statusBadge   = { 'IN PROGRESS':'badge-progress', COMPLETED:'badge-completed', PENDING:'badge-pending' };
+const dotClass      = { 'IN PROGRESS':'dot-blue', COMPLETED:'dot-green', PENDING:'dot-orange' };
+
+function render(q='') {
+  const list = tasks.filter(t =>
+    t.title.includes(q) || t.status.includes(q) || t.priority.includes(q)
+  );
+
+  if (list.length === 0) {
+    emptyState.classList.add('show');
+    tableWrap.style.display = 'none';
+    return;
+  }
+  emptyState.classList.remove('show');
+  tableWrap.style.display = 'block';
+
+  tbody.innerHTML = list.map(t => `
+    <tr>
+      <td>
+        <div class="actions">
+          <button class="act-btn" title="مشاهده" onclick="viewTask(${t.id})">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          <button class="act-btn" title="ویرایش" onclick="editTask(${t.id})">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+        </div>
+      </td>
+      <td><span class="badge ${statusBadge[t.status]}">${t.status}</span></td>
+      <td><span class="badge ${priorityBadge[t.priority]}">${t.priority}</span></td>
+      <td style="color:#9ca3af;font-size:11px">${t.date}</td>
+      <td>
+        <div class="task-cell">
+          <span class="dot ${dotClass[t.status]}"></span>
+          ${t.title}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+function viewTask(id) {
+  const t = tasks.find(x => x.id===id);
+  if (t) alert(`عنوان: ${t.title}\nوضعیت: ${t.status}\nاولویت: ${t.priority}\nتاریخ: ${t.date}`);
+}
+function editTask(id) {
+  const t = tasks.find(x => x.id===id);
+  if (!t) return;
+  document.getElementById('fTitle').value    = t.title;
+  document.getElementById('fPriority').value = t.priority;
+  document.getElementById('fStatus').value   = t.status;
+  openModal();
+}
+
+/* ============================================================
+   SEARCH
+   ============================================================ */
+searchInput.addEventListener('input', () => render(searchInput.value));
+
+/* ============================================================
+   STATS
+   ============================================================ */
+function updateStats() {
+  document.getElementById('statTotal').textContent    = tasks.length;
+  document.getElementById('statDone').textContent     = tasks.filter(t=>t.status==='COMPLETED').length;
+  document.getElementById('statProgress').textContent = tasks.filter(t=>t.status==='IN PROGRESS').length;
+  document.getElementById('statPending').textContent  = tasks.filter(t=>t.status==='PENDING').length;
+}
+
+/* ============================================================
+   SIDEBAR NAV
+   ============================================================ */
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+/* ============================================================
+   BAR CHART
+   ============================================================ */
+function renderBars() {
+  const el  = document.getElementById('barsEl');
+  const max = Math.max(...weekData.map(d=>d.v));
+  el.innerHTML = weekData.map(d => {
+    const h = Math.round((d.v/max)*95);
+    const isMax = d.v===max;
+    return `
+      <div class="bar-col">
+        <div class="bar" style="height:${h}px;background:${isMax?'#5B7CFA':'#C7D2FE'}"></div>
+        <span class="bar-lbl">${d.day}</span>
+      </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+renderBars();
+render();
+updateStats();
